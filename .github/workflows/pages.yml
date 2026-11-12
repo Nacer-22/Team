@@ -1,0 +1,58 @@
+name: Publish HAX_TEAM on GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build static interface from the original ZIP
+        run: |
+          set -e
+          unzip -q "HAX_TEAM (1).zip" -d /tmp/haxteam
+          source_dir="/tmp/haxteam/HAX_TEAM"
+          mkdir -p _site/src _site/media
+          cp "$source_dir/index.html" _site/index.html
+          cp "$source_dir/logo.png" _site/logo.png
+          cp -a "$source_dir/src/." _site/src/
+          cp -a "$source_dir/public/media/." _site/media/
+          cp "$source_dir/public/icon.png" _site/icon.png
+          cp "$source_dir/public/apple-icon.png" _site/apple-icon.png
+          python - <<'PY'
+          from pathlib import Path
+          for path in Path("_site/src").glob("*.css"):
+              content = path.read_text(encoding="utf-8")
+              content = content.replace("url(/media/", "url(../media/")
+              path.write_text(content, encoding="utf-8")
+          PY
+          touch _site/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload static site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
